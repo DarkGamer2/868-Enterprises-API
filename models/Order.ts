@@ -1,0 +1,11 @@
+import mongoose, { Schema } from "mongoose";
+import dotenv from "dotenv";
+dotenv.config();
+mongoose.connect(`${process.env.MONGO_URI}`)
+
+const orderSchema=new Schema({
+    userId:{type:Schema.Types.ObjectId,ref:"User",required:true}
+})
+
+const Order=mongoose.model('Quote',orderSchema);
+export default Order;
