@@ -4,8 +4,11 @@ dotenv.config();
 mongoose.connect(`${process.env.MONGO_URI}`)
 
 const orderSchema=new Schema({
-    userId:{type:Schema.Types.ObjectId,ref:"User",required:true}
+    userId:{type:Schema.Types.ObjectId,ref:"User",required:true},
+    accountName:String,
+    products:Array,
+    orderDate:Date.toString()
 })
 
-const Order=mongoose.model('Quote',orderSchema);
+const Order=mongoose.model('Order',orderSchema);
 export default Order;

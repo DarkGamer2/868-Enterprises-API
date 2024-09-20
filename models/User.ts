@@ -1,18 +1,18 @@
-import mongoose from "mongoose";
-import { Schema } from "mongoose";
+import mongoose, { Document, Schema } from "mongoose";
+import { UserInterface } from "../interface/interface";
 import dotenv from "dotenv";
 dotenv.config();
-mongoose.connect(`${process.env.MONGO_URI}`)
-
-
-const userSchema = new mongoose.Schema({
-  fullName: { type: String, required: true },
-  username: { type: String, required: true, unique: true },
+type UserDocument = UserInterface & Document;
+mongoose.connect(`${process.env.MONGO_URI}`, {
+  serverSelectionTimeoutMS: 30000, // Increase timeout to 30 seconds
+});
+const UserSchema: Schema = new Schema({
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
+  fullName: { type: String, required: true },
   id: { type: String },
 });
 
+const User = mongoose.model<UserDocument>("User", UserSchema);
 
-const User=mongoose.model('User',userSchema);
 export default User;

@@ -1,42 +1,41 @@
 import passport from "passport";
-import { userInterface } from "../interface/interface";
-import User from "../models/User";
+import { Strategy as LocalStrategy } from "passport-local";
 import bcrypt from "bcrypt";
-const localStrategy =require("passport-local").Strategy;
+import User from "../models/User";
+// Removed unused import
 
-module.exports = function(passport: any) {
-    passport.use(new localStrategy(async (email: string, password: string, done: any) => {
+export default function configurePassport() {
+  passport.use(
+    new LocalStrategy(
+      { usernameField: "email" }, // Use email instead of username
+      async (email, password, done) => {
         try {
-            const user = await User.findOne({ email: email });
-
-            if (!user || !user.password) { // Check if user or password is undefined
-                return done(null, false);
-            }
-
-            const isMatch = await bcrypt.compare(password, user.password);
-            if (isMatch) {
-                return done(null, user);
-            } else {
-                return done(null, false);
-            }
+          const user = await User.findOne({ email });
+          if (!user) {
+            return done(null, false, { message: "Incorrect email." });
+          }
+          const isMatch = await bcrypt.compare(password, user.password);
+          if (!isMatch) {
+            return done(null, false, { message: "Incorrect password." });
+          }
+          return done(null, user);
         } catch (err) {
-            return done(err);
+          return done(err);
         }
-    }));
+      }
+    )
+  );
+
+  passport.serializeUser((user: Express.User, done) => {
+    done(null, (user as any)._id); // or any unique identifier
+  });
+
+  passport.deserializeUser(async (id: string, done) => {
+    try {
+      const user = await User.findById(id);
+      done(null, user);
+    } catch (err) {
+      done(err);
+    }
+  });
 }
-
-
-
-passport.serializeUser((user,cb)=>{
-    cb(null,(user as any).id);
-})
-
-passport.deserializeUser((id, cb) => {
-    User.findById(id)
-        .then(user => {
-            cb(null, user);
-        })
-        .catch(err => {
-            cb(err, null);
-        });
-});
