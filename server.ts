@@ -231,26 +231,28 @@ app.get("/api/users/:email/orders", async (req: Request, res: Response) => {
 
 // Stripe checkout endpoint
 app.post("/api/checkout", async (req: Request, res: Response) => {
-  const { products } = req.body;
+  const { items } = req.body;
 
-  // Validate that products is defined and is an array
-  if (!products || !Array.isArray(products)) {
-    return res.status(400).send("Invalid request: products must be an array");
+  // Validate that items is an array
+  if (!items || !Array.isArray(items)) {
+    return res.status(400).send("Invalid request: items must be an array");
   }
 
-  const lineItems = products.map((product: any) => ({
+  // Map over items to create Stripe line items
+  const lineItems = items.map((product: any) => ({
     price_data: {
       currency: "ttd",
       product_data: {
         name: product.name,
         images: [product.image],
       },
-      unit_amount: product.price * 100,
+      unit_amount: product.price * 100,  // Stripe expects amount in cents
     },
     quantity: product.quantity,
   }));
 
   try {
+    // Create Stripe session
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       line_items: lineItems,
@@ -258,12 +260,15 @@ app.post("/api/checkout", async (req: Request, res: Response) => {
       success_url: `${process.env.CLIENT_URL}/success`,
       cancel_url: `${process.env.CLIENT_URL}/cancel`,
     });
+
+    // Send session ID back to the frontend
     res.status(200).json({ id: session.id });
   } catch (error) {
-    console.error(error);
+    console.error("Error creating checkout session:", error);
     res.status(500).send("Error creating checkout session");
   }
 });
+
 
 // Uncomment this endpoint if you want to get the authenticated user's email
 // app.get('/api/users/me', (req: Request, res: Response) => {
