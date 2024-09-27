@@ -18,16 +18,19 @@ import compression from "compression";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import Quote from "./models/Quote";
-
+import Stripe from "stripe";
 dotenv.config(); // Load environment variables from .env file
 
-const stripe = require("stripe")(process.env.STRIPE_KEY); // Initialize Stripe with API key
+const stripe = new Stripe(process.env.STRIPE_KEY as string, {
+  apiVersion: "2024-04-10",
+}); // Initialize Stripe with API key
 
 const app: Express = express();
 
 const allowedOrigin = "http://localhost:5173";
 const mongo = `${process.env.MONGO_URI}`;
-mongoose.connect(mongo); // Connect to MongoDB
+mongoose.connect(mongo
+); // Connect to MongoDB
 
 const connection = mongoose.connection;
 
@@ -246,7 +249,7 @@ app.post("/api/checkout", async (req: Request, res: Response) => {
         name: product.name,
         images: [product.image],
       },
-      unit_amount: product.price * 100,  // Stripe expects amount in cents
+      unit_amount: product.price * 100, // Stripe expects amount in cents
     },
     quantity: product.quantity,
   }));
@@ -269,13 +272,12 @@ app.post("/api/checkout", async (req: Request, res: Response) => {
   }
 });
 
-
 // Uncomment this endpoint if you want to get the authenticated user's email
 // app.get('/api/users/me', (req: Request, res: Response) => {
 //   if (!req.isAuthenticated || !req.isAuthenticated()) {
 //     return res.status(401).json({ message: 'Unauthorized' });
 //   }
-//   res.json({ email: req.user.email});
+//   res.json({ email: req.user.email });
 // });
 
 // Start the server
