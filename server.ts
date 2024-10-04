@@ -20,7 +20,8 @@ import Quote from "./models/Quote";
 import Stripe from "stripe";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandlers"; // Import error handlers
 import csurf from "csurf";
-import { UserRegistration,UserLogin,ProductInterface,QuoteRequest,StripeCheckout } from "./interface/interface";
+import { UserRegistration, UserLogin, ProductInterface, QuoteRequest, StripeCheckout } from "./interface/interface";
+
 const app: Express = express();
 app.use(csurf());
 if (process.env.NODE_ENV === "production") {
@@ -81,7 +82,7 @@ app.use(limiter);
 
 app.use(
   cors({
-    origin: allowedOrigin,
+   origin:"http://localhost:5173",
     credentials: true,
   })
 );
@@ -207,6 +208,30 @@ app.delete(
     }
   }
 );
+
+// Fetch all products
+app.get("/api/products", async (req: Request, res: Response) => {
+  try {
+    const products = await Product.find();
+    res.status(200).json(products);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error fetching products" });
+  }
+});
+
+// Fetch products based on category
+app.get("/api/products", async (req: Request, res: Response) => {
+  const category = req.query.category as string;
+
+  try {
+    const products = await Product.find(category ? { category } : {});
+    res.status(200).json(products);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error fetching products" });
+  }
+});
 
 // Upload a file
 app.post("/upload", upload.single("file"), (req: Request, res: Response) => {
