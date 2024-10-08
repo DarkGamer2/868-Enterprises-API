@@ -1,7 +1,7 @@
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import bcrypt from "bcrypt";
-import User from "../models/User";
+const User = require("../models/User");
 
 // Passport authentication setup
 const configurePassport = () => {
