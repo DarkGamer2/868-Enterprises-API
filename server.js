@@ -20,13 +20,6 @@ const Quote = require("./models/Quote");
 const Stripe = require("stripe");
 const { errorHandler, notFoundHandler } = require("./middleware/errorHandlers"); // Import error handlers
 const csurf = require("csurf");
-const {
-  UserRegistration,
-  UserLogin,
-  ProductInterface,
-  QuoteRequest,
-  StripeCheckout,
-} = require("./interface/interface");
 
 const app = express();
 app.use(csurf());
