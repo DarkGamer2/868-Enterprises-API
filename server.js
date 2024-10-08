@@ -82,7 +82,7 @@ app.use(limiter);
 
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin: "https://mewzaline.up.railway.app/",
     credentials: true,
   })
 );
