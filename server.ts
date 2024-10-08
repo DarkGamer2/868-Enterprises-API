@@ -32,7 +32,7 @@ const app = express();
 app.use(csurf());
 
 if (process.env.NODE_ENV === "production") {
-  app.use((req:any, res:any, next:any) => {
+  app.use((req, res, next) => {
     if (req.headers["x-forwarded-proto"] !== "https") {
       return res.redirect("https://" + req.headers.host + req.url);
     }
@@ -51,7 +51,7 @@ const mongo = process.env.MONGO_URI;
 mongoose
   .connect(mongo)
   .then(() => console.log("MongoDB connected"))
-  .catch((err:any) => console.error("MongoDB connection error:", err));
+  .catch((err) => console.error("MongoDB connection error:", err));
 
 const connection = mongoose.connection;
 
@@ -70,7 +70,7 @@ connection.once("open", () => {
 
 const storage = new GridFsStorage({
   url: mongo,
-  file: (req:any, file:any) => {
+  file: (req, file) => {
     return { filename: file.originalname };
   },
 });
@@ -113,12 +113,12 @@ app.use(passport.session());
 configurePassport(); // Call the function to configure passport
 
 // Basic route to check server status
-app.get("/", (req:any, res:any) => {
+app.get("/", (req, res) => {
   res.send("Hello World!");
 });
 
 // User registration endpoint
-app.post("/api/users/register", async (req:any, res:any) => {
+app.post("/api/users/register", async (req, res) => {
   try {
     const { email, password, fullName } = req.body;
 
@@ -139,12 +139,12 @@ app.post("/api/users/register", async (req:any, res:any) => {
 });
 
 // User login endpoint
-app.post("/api/users/login", (req:any, res:any, next:any) => {
-  passport.authenticate("local", (err:any, user:any, info:any) => {
+app.post("/api/users/login", (req, res, next) => {
+  passport.authenticate("local", (err, user, info) => {
     if (err) return next(err);
     if (!user) return res.status(401).json({ message: "Invalid credentials" });
 
-    req.logIn(user, (err:any) => {
+    req.logIn(user, (err) => {
       if (err) return next(err);
       res.status(200).json({ message: "User logged in successfully" });
     });
@@ -152,7 +152,7 @@ app.post("/api/users/login", (req:any, res:any, next:any) => {
 });
 
 // Add a new product
-app.post("/api/products/addProduct", async (req:any, res:any) => {
+app.post("/api/products/addProduct", async (req, res) => {
   try {
     const product = new Product(req.body);
     await product.save();
@@ -164,7 +164,7 @@ app.post("/api/products/addProduct", async (req:any, res:any) => {
 });
 
 // Update an existing product
-app.put("/api/products/:productId/update", async (req:any, res:any) => {
+app.put("/api/products/:productId/update", async (req, res) => {
   try {
     const updatedProduct = await Product.findByIdAndUpdate(req.params.productId, req.body, { new: true });
     if (!updatedProduct) return res.status(404).json({ message: "Product not found" });
@@ -177,7 +177,7 @@ app.put("/api/products/:productId/update", async (req:any, res:any) => {
 });
 
 // Delete a product
-app.delete("/api/products/:productId/delete", async (req:any, res:any) => {
+app.delete("/api/products/:productId/delete", async (req, res) => {
   try {
     const result = await Product.findByIdAndDelete(req.params.productId);
     if (!result) return res.status(404).json({ message: "Product not found" });
@@ -190,7 +190,7 @@ app.delete("/api/products/:productId/delete", async (req:any, res:any) => {
 });
 
 // Fetch all products
-app.get("/api/products", async (req:any, res:any) => {
+app.get("/api/products", async (req, res) => {
   try {
     const products = await Product.find();
     res.status(200).json(products);
@@ -201,7 +201,7 @@ app.get("/api/products", async (req:any, res:any) => {
 });
 
 // Fetch products based on category
-app.get("/api/products", async (req:any, res:any) => {
+app.get("/api/products", async (req, res) => {
   const category = req.query.category;
 
   try {
@@ -214,12 +214,12 @@ app.get("/api/products", async (req:any, res:any) => {
 });
 
 // Upload a file
-app.post("/upload", upload.single("file"), (req:any, res:any) => {
+app.post("/upload", upload.single("file"), (req, res) => {
   res.json({ file: req.file });
 });
 
 // Request a quote
-app.post("/api/request/quote", async (req:any, res:any) => {
+app.post("/api/request/quote", async (req, res) => {
   try {
     const quote = new Quote(req.body);
     await quote.save();
@@ -231,7 +231,7 @@ app.post("/api/request/quote", async (req:any, res:any) => {
 });
 
 // Get orders for a user
-app.get("/api/users/:email/orders", async (req:any, res:any) => {
+app.get("/api/users/:email/orders", async (req, res) => {
   try {
     const user = await User.findOne({ email: req.params.email });
     if (!user) return res.status(404).json({ message: "User not found" });
@@ -245,7 +245,7 @@ app.get("/api/users/:email/orders", async (req:any, res:any) => {
 });
 
 // Stripe checkout endpoint
-app.post("/api/checkout", async (req:any, res:any) => {
+app.post("/api/checkout", async (req, res) => {
   const { items } = req.body;
 
   if (!items || !Array.isArray(items)) {
