@@ -14,4 +14,4 @@ const quoteSchema=new Schema({
 })
 
 const Quote=mongoose.model('Quote',quoteSchema);
-export default Quote;
+module.exports=Quote;
