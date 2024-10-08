@@ -24,7 +24,7 @@ const configurePassport = () => {
     )
   );
 
-  passport.serializeUser((user: any, done) => {
+  passport.serializeUser((user, done) => {
     done(null, user.id);
   });
 
