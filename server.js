@@ -39,7 +39,7 @@ const stripe = new Stripe(process.env.STRIPE_KEY, {
   apiVersion: "2024-04-10",
 }); // Initialize Stripe with API key
 
-const allowedOrigin = process.env.CLIENT_URL || "http://localhost:5173";
+const allowedOrigin = process.env.CLIENT_URL || "https://mewzaline.up.railway.app/";
 const mongo = process.env.MONGO_URI;
 mongoose
   .connect(mongo)
