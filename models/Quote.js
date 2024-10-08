@@ -1,6 +1,6 @@
-import mongoose from "mongoose";
-import { Schema } from "mongoose";
-
+const mongoose=require('mongoose');
+const Schema=mongoose.Schema;
+mongoose.connect(`${process.env.MONGO_URI}`);
 const quoteSchema=new Schema({
     // quote:String,
     // author:String,

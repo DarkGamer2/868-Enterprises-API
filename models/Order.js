@@ -1,5 +1,6 @@
-import mongoose, { Schema } from "mongoose";
-import dotenv from "dotenv";
+const mongoose=require('mongoose');
+const Schema=mongoose.Schema;
+const dotenv=require('dotenv');
 dotenv.config();
 mongoose.connect(`${process.env.MONGO_URI}`)
 

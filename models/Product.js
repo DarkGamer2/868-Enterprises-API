@@ -1,7 +1,8 @@
-import mongoose from "mongoose";
-import dotenv from "dotenv";
+const mongoose=require('mongoose');
+const dotenv=require('dotenv');
 dotenv.config();
 const Schema=mongoose.Schema;
+mongoose.connect(`${process.env.MONGO_URI}`)
 
 const productSchema=new Schema({
 productName:String,
