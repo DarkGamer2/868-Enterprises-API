@@ -80,14 +80,28 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-const allowedOrigin = process.env.CLIENT_URL || "https://mewzaline.up.railway.app";
-app.use(
-  cors({
-    origin: allowedOrigin,
-    credentials: true,
-  })
-);
+const allowedOrigins = [process.env.CLIENT_URL, "https://mewzaline.up.railway.app"];
+
+app.use(cors({
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps, curl requests)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
+  credentials: true,
+}));
+
+// Make sure preflight requests (OPTIONS) are handled correctly
 app.options("*", cors());
+
+app.use((req, res, next) => {
+  res.cookie("XSRF-TOKEN", req.csrfToken()); // Send token as a cookie
+  next();
+});
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(cookieParser());
