@@ -39,7 +39,7 @@ const stripe = new Stripe(process.env.STRIPE_KEY, {
   apiVersion: "2024-04-10",
 }); // Initialize Stripe with API key
 
-const allowedOrigin = process.env.CLIENT_URL || "https://mewzaline.up.railway.app/";
+
 const mongo = process.env.MONGO_URI;
 mongoose
   .connect(mongo)
@@ -80,13 +80,14 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
+const allowedOrigin = process.env.CLIENT_URL || "https://mewzaline.up.railway.app";
 app.use(
   cors({
-    origin: "https://mewzaline.up.railway.app/",
+    origin: allowedOrigin,
     credentials: true,
   })
 );
-
+app.options("*", cors());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(cookieParser());
