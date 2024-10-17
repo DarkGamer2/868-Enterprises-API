@@ -27,7 +27,7 @@ const app = express();
 
 // CORS configuration
 const corsOptions = {
-  origin: 'https://mewzaline.up.railway.app/', // Allow only this origin to access the API
+  origin: 'https://mewzaline.up.railway.app', // Allow only this origin to access the API
   credentials: true,               // Allow credentials (cookies, authorization headers, etc.)
 };
 
