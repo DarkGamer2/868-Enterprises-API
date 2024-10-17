@@ -6,7 +6,7 @@ const cookieParser = require("cookie-parser");
 const dotenv = require("dotenv");
 const bcrypt = require("bcrypt");
 const User = require("./models/User");
-const configurePassport = require("./auth/passportConfig"); // Import the function
+const configurePassport = require("./auth/passportConfig");
 const Product = require("./models/Product");
 const multer = require("multer");
 const Grid = require("gridfs-stream");
@@ -18,27 +18,54 @@ const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const Quote = require("./models/Quote");
 const Stripe = require("stripe");
-const { errorHandler, notFoundHandler } = require("./middleware/errorHandlers"); // Import error handlers
+const { errorHandler, notFoundHandler } = require("./middleware/errorHandlers");
 const csurf = require("csurf");
-
-const app = express();
-app.use(csurf());
-
-if (process.env.NODE_ENV === "production") {
-  app.use((req, res, next) => {
-    if (req.headers["x-forwarded-proto"] !== "https") {
-      return res.redirect("https://" + req.headers.host + req.url);
-    }
-    next();
-  });
-}
 
 dotenv.config(); // Load environment variables from .env file
 
-const stripe = new Stripe(process.env.STRIPE_KEY, {
-  apiVersion: "2024-04-10",
-}); // Initialize Stripe with API key
+const app = express();
 
+// CORS configuration
+const corsOptions = {
+  origin: 'http://localhost:5173', // Allow only this origin to access the API
+  credentials: true,               // Allow credentials (cookies, authorization headers, etc.)
+};
+
+app.use(cors(corsOptions));
+app.use(cookieParser()); // Place this before session and CSRF protection
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Set up session management
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET || "your_secret_key",
+    resave: false,
+    saveUninitialized: false,
+    cookie: { secure: process.env.NODE_ENV === "production", httpOnly: true },
+  })
+);
+
+// Initialize CSRF protection
+const csrfProtection = csurf({ cookie: true });
+app.use(csrfProtection);
+
+// Middleware to set CSRF token in a cookie
+app.use((req, res, next) => {
+  res.cookie("XSRF-TOKEN", req.csrfToken()); // Send token as a cookie
+  next();
+});
+
+// Helmet for security headers
+app.use(helmet()); // Adds security headers
+app.use(compression()); // Compresses response bodies
+
+// Rate limiting middleware to prevent abuse
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+});
+app.use(limiter);
 
 const mongo = process.env.MONGO_URI;
 mongoose
@@ -70,52 +97,6 @@ const storage = new GridFsStorage({
 
 const upload = multer({ storage });
 
-app.use(helmet()); // Adds security headers
-app.use(compression()); // Compresses response bodies
-
-// Rate limiting middleware to prevent abuse
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
-});
-app.use(limiter);
-
-const allowedOrigins = [process.env.CLIENT_URL, "https://mewzaline.up.railway.app"];
-
-app.use(cors({
-  origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps, curl requests)
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) === -1) {
-      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-      return callback(new Error(msg), false);
-    }
-    return callback(null, true);
-  },
-  credentials: true,
-}));
-
-// Make sure preflight requests (OPTIONS) are handled correctly
-app.options("*", cors());
-
-app.use((req, res, next) => {
-  res.cookie("XSRF-TOKEN", req.csrfToken()); // Send token as a cookie
-  next();
-});
-app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
-app.use(cookieParser());
-
-// Set up session management
-app.use(
-  session({
-    secret: process.env.SESSION_SECRET || "your_secret_key",
-    resave: false,
-    saveUninitialized: false, // Changed to false for security
-    cookie: { secure: process.env.NODE_ENV === "production", httpOnly: true }, // Secure and httpOnly options
-  })
-);
-
 app.use(passport.initialize());
 app.use(passport.session());
 configurePassport(); // Call the function to configure passport
@@ -125,10 +106,23 @@ app.get("/", (req, res) => {
   res.send("Hello World!");
 });
 
+// Route to get CSRF token
+app.get("/api/csrf-token", (req, res) => {
+  console.log("CSRF Token Request Received");
+  try {
+    const token = req.csrfToken();
+    console.log("Generated CSRF Token:", token);
+    res.status(200).json({ csrfToken: token });
+  } catch (error) {
+    console.error("Error getting CSRF token:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
 // User registration endpoint
 app.post("/api/users/register", async (req, res) => {
   try {
-    const { email, password, fullName } = req.body;
+    const { email, password, fullName, username } = req.body;
 
     const user = await User.findOne({ email });
     if (user) {
@@ -136,7 +130,7 @@ app.post("/api/users/register", async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const newUser = new User({ email, password: hashedPassword, fullName });
+    const newUser = new User({ email, password: hashedPassword, fullName, username });
     await newUser.save();
 
     res.status(201).json({ message: "User registered successfully" });
@@ -149,14 +143,44 @@ app.post("/api/users/register", async (req, res) => {
 // User login endpoint
 app.post("/api/users/login", (req, res, next) => {
   passport.authenticate("local", (err, user, info) => {
-    if (err) return next(err);
-    if (!user) return res.status(401).json({ message: "Invalid credentials" });
+    if (err) {
+      console.error(err); // Log the error for debugging
+      return next(err);
+    }
+    if (!user) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
 
     req.logIn(user, (err) => {
-      if (err) return next(err);
-      res.status(200).json({ message: "User logged in successfully" });
+      if (err) {
+        console.error(err); // Log the error for debugging
+        return next(err);
+      }
+      res.status(200).json({ message: "User logged in successfully", username: user.username }); // Include username in response
     });
   })(req, res, next);
+});
+
+
+// Fetch user profile
+app.get("/api/users/profile", async (req, res) => {
+  const email = req.query.email;
+
+  if (!email) {
+    return res.status(400).json({ message: "Email query parameter is required" });
+  }
+
+  try {
+    const user = await User.findOne({ email }).select("-password"); // Exclude password field
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.status(200).json(user);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error fetching user profile" });
+  }
 });
 
 // Add a new product
@@ -201,19 +225,6 @@ app.delete("/api/products/:productId/delete", async (req, res) => {
 app.get("/api/products", async (req, res) => {
   try {
     const products = await Product.find();
-    res.status(200).json(products);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Error fetching products" });
-  }
-});
-
-// Fetch products based on category
-app.get("/api/products", async (req, res) => {
-  const category = req.query.category;
-
-  try {
-    const products = await Product.find(category ? { category } : {});
     res.status(200).json(products);
   } catch (error) {
     console.error(error);
@@ -277,22 +288,21 @@ app.post("/api/checkout", async (req, res) => {
       payment_method_types: ["card"],
       line_items: lineItems,
       mode: "payment",
-      success_url: `${process.env.CLIENT_URL}/success`,
-      cancel_url: `${process.env.CLIENT_URL}/cancel`,
+      success_url: `${process.env.FRONTEND_URL}/success`,
+      cancel_url: `${process.env.FRONTEND_URL}/cancel`,
     });
 
-    res.status(200).json({ id: session.id });
+    res.json({ id: session.id });
   } catch (error) {
-    console.error("Error creating checkout session:", error);
-    res.status(500).json({ message: "Error creating checkout session" });
+    console.error(error);
+    res.status(500).json({ message: "Error creating Stripe checkout session" });
   }
 });
 
-// Error handling middlewares
-app.use(notFoundHandler);
-app.use(errorHandler); // Handles any errors
+// Error handling middleware
+app.use(notFoundHandler); // Handle 404 errors
+app.use(errorHandler); // Handle other errors
 
-// Start the server
 const PORT = process.env.PORT || 4900;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
