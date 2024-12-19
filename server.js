@@ -20,15 +20,20 @@ const Quote = require("./models/Quote");
 const Stripe = require("stripe");
 const { errorHandler, notFoundHandler } = require("./middleware/errorHandlers");
 const csurf = require("csurf");
-
+const { v4: uuidv4 } = require("uuid");
 dotenv.config(); // Load environment variables from .env file
 
 const app = express();
-
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+const stripeWebSecret=process.env.STRIPE_WEBHOOK_SECRET;
 // CORS configuration
 const corsOptions = {
-  origin: 'https://mewzaline.up.railway.app', // Allow only this origin to access the API
-  credentials: true,               // Allow credentials (cookies, authorization headers, etc.)
+  origin: ['https://mewzaline.up.railway.app', 'http://localhost:5173'], // Allow both production and localhost origins
+  credentials: true, // Allow credentials (cookies, authorization headers, etc.)
+  allowedHeaders: ["authorization", "Content-Type","x-csrf-token"], // Specify allowed headers
+  exposedHeaders: ["authorization"], // Specify exposed headers
+  methods: "GET,HEAD,PUT,PATCH,POST,DELETE", // Specify allowed methods
+  preflightContinue: false,
 };
 
 app.use(cors(corsOptions));
@@ -41,7 +46,7 @@ app.use(
   session({
     secret: process.env.SESSION_SECRET || "your_secret_key",
     resave: false,
-    saveUninitialized: false,
+    saveUninitialized: true,
     cookie: { secure: process.env.NODE_ENV === "production", httpOnly: true },
   })
 );
@@ -107,16 +112,8 @@ app.get("/", (req, res) => {
 });
 
 // Route to get CSRF token
-app.get("/api/csrf-token", (req, res) => {
-  console.log("CSRF Token Request Received");
-  try {
-    const token = req.csrfToken();
-    console.log("Generated CSRF Token:", token);
-    res.status(200).json({ csrfToken: token });
-  } catch (error) {
-    console.error("Error getting CSRF token:", error);
-    res.status(500).json({ message: "Internal Server Error" });
-  }
+app.get('/api/csrf-token', (req, res) => {
+  res.json({ csrfToken: req.csrfToken() });
 });
 
 // User registration endpoint
@@ -160,7 +157,6 @@ app.post("/api/users/login", (req, res, next) => {
     });
   })(req, res, next);
 });
-
 
 // Fetch user profile
 app.get("/api/users/profile", async (req, res) => {
@@ -263,39 +259,120 @@ app.get("/api/users/:email/orders", async (req, res) => {
   }
 });
 
-// Stripe checkout endpoint
-app.post("/api/checkout", async (req, res) => {
-  const { items } = req.body;
-
-  if (!items || !Array.isArray(items)) {
-    return res.status(400).json({ message: "Invalid request: items must be an array" });
-  }
-
-  const lineItems = items.map((product) => ({
-    price_data: {
-      currency: "ttd",
-      product_data: {
-        name: product.name,
-        images: [product.image],
-      },
-      unit_amount: product.price * 100, // Stripe expects amount in cents
-    },
-    quantity: product.quantity,
-  }));
-
+//stripe session
+app.post("/api/session", async (req, res) => {
   try {
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
-      line_items: lineItems,
       mode: "payment",
-      success_url: `${process.env.FRONTEND_URL}/success`,
-      cancel_url: `${process.env.FRONTEND_URL}/cancel`,
+      line_items: req.body.items.map(item => ({
+        price_data: {
+          currency: "ttd",
+          product_data: {
+            name: item.name,
+            images: [item.image],
+          },
+          unit_amount: item.price * 100,
+        },
+        quantity: item.quantity,
+      })),
+      success_url: `${process.env.CLIENT_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.CLIENT_URL}/cancel`,
     });
 
-    res.json({ id: session.id });
+    res.json({ url: session.url });
   } catch (error) {
-    console.error(error);
+    console.error("Error creating session:", error);
     res.status(500).json({ message: "Error creating Stripe checkout session" });
+  }
+});
+
+// Webhook endpoint
+app.post("/api/webhook", express.raw({ type: "application/json" }), async (req, res) => {
+  const sig = req.headers["stripe-signature"];
+  let event;
+
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, stripeWebSecret);
+  } catch (err) {
+    console.error("Webhook error:", err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  if (event.type === "checkout.session.completed") {
+    const session = event.data.object;
+    console.log("Session completed:", session);
+  }
+
+  res.status(200).end();
+});
+
+// Stripe checkout endpoint
+// app.post("/api/checkout", async (req, res) => {
+//   const { items, email } = req.body; // Ensure email is sent with the request
+
+//   if (!items || !Array.isArray(items)) {
+//       return res.status(400).json({ message: "Invalid request: items must be an array" });
+//   }
+
+//   const lineItems = items.map((product) => ({
+//       price_data: {
+//           currency: "ttd", // Ensure the currency matches your requirements
+//           product_data: {
+//               name: product.name,
+//               images: [product.image],
+//           },
+//           unit_amount: product.price * 100,
+//       },
+//       quantity: product.quantity,
+//   }));
+
+//   try {
+//       // Generate unique order ID
+//       const orderId = uuidv4();
+
+//       // Create a Stripe checkout session
+//       const session = await stripe.checkout.sessions.create({
+//           payment_method_types: ["card"],
+//           line_items: lineItems,
+//           mode: "payment",
+//           success_url: `${process.env.FRONTEND_URL}/success?orderId=${orderId}`,
+//           cancel_url: `${process.env.FRONTEND_URL}/cancel`,
+//       });
+
+//       // Save order to the database
+//       const newOrder = new Quote({
+//           orderId,
+//           email, // Save user email
+//           items,
+//           totalAmount: items.reduce((sum, item) => sum + item.price * item.quantity, 0),
+//           status: "Pending",
+//           stripeSessionId: session.id,
+//       });
+
+//       await newOrder.save();
+
+//       res.json({ id: session.id, orderId }); // Return orderId to the frontend
+//   } catch (error) {
+//       console.error("Error creating Stripe checkout session:", error);
+//       res.status(500).json({ message: "Error creating Stripe checkout session" });
+//   }
+// });
+
+// Stripe webhook endpoint
+app.get("/api/orders/:orderId", async (req, res) => {
+  const {orderId} = req.params;
+
+  try{
+    const order=await Quote.findOne({orderId});
+    if(!order){
+      return res.status(404).json({message:"Order not found"});
+    }
+    res.status(200).json(order);
+  }
+  catch(error){
+    console.error(error);
+    res.status(500).json({message:"Error fetching order",error});
   }
 });
 
