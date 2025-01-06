@@ -307,57 +307,56 @@ app.post("/api/webhook", express.raw({ type: "application/json" }), async (req, 
   res.status(200).end();
 });
 
-// Stripe checkout endpoint
-// app.post("/api/checkout", async (req, res) => {
-//   const { items, email } = req.body; // Ensure email is sent with the request
+app.post("/api/checkout", async (req, res) => {
+  const { items, email } = req.body; // Ensure email is sent with the request
 
-//   if (!items || !Array.isArray(items)) {
-//       return res.status(400).json({ message: "Invalid request: items must be an array" });
-//   }
+  if (!items || !Array.isArray(items)) {
+      return res.status(400).json({ message: "Invalid request: items must be an array" });
+  }
 
-//   const lineItems = items.map((product) => ({
-//       price_data: {
-//           currency: "ttd", // Ensure the currency matches your requirements
-//           product_data: {
-//               name: product.name,
-//               images: [product.image],
-//           },
-//           unit_amount: product.price * 100,
-//       },
-//       quantity: product.quantity,
-//   }));
+  const lineItems = items.map((product) => ({
+      price_data: {
+          currency: "ttd", // Ensure the currency matches your requirements
+          product_data: {
+              name: product.name,
+              images: [product.image],
+          },
+          unit_amount: product.price * 100,
+      },
+      quantity: product.quantity,
+  }));
 
-//   try {
-//       // Generate unique order ID
-//       const orderId = uuidv4();
+  try {
+      // Generate unique order ID
+      const orderId = uuidv4();
 
-//       // Create a Stripe checkout session
-//       const session = await stripe.checkout.sessions.create({
-//           payment_method_types: ["card"],
-//           line_items: lineItems,
-//           mode: "payment",
-//           success_url: `${process.env.FRONTEND_URL}/success?orderId=${orderId}`,
-//           cancel_url: `${process.env.FRONTEND_URL}/cancel`,
-//       });
+      // Create a Stripe checkout session
+      const session = await stripe.checkout.sessions.create({
+          payment_method_types: ["card"],
+          line_items: lineItems,
+          mode: "payment",
+          success_url: `${process.env.FRONTEND_URL}/success?orderId=${orderId}`,
+          cancel_url: `${process.env.FRONTEND_URL}/cancel`,
+      });
 
-//       // Save order to the database
-//       const newOrder = new Quote({
-//           orderId,
-//           email, // Save user email
-//           items,
-//           totalAmount: items.reduce((sum, item) => sum + item.price * item.quantity, 0),
-//           status: "Pending",
-//           stripeSessionId: session.id,
-//       });
+      // Save order to the database
+      const newOrder = new Quote({
+          orderId,
+          email, // Save user email
+          items,
+          totalAmount: items.reduce((sum, item) => sum + item.price * item.quantity, 0),
+          status: "Pending",
+          stripeSessionId: session.id,
+      });
 
-//       await newOrder.save();
+      await newOrder.save();
 
-//       res.json({ id: session.id, orderId }); // Return orderId to the frontend
-//   } catch (error) {
-//       console.error("Error creating Stripe checkout session:", error);
-//       res.status(500).json({ message: "Error creating Stripe checkout session" });
-//   }
-// });
+      res.json({ id: session.id, orderId }); // Return orderId to the frontend
+  } catch (error) {
+      console.error("Error creating Stripe checkout session:", error);
+      res.status(500).json({ message: "Error creating Stripe checkout session" });
+  }
+});
 
 // Stripe webhook endpoint
 app.get("/api/orders/:orderId", async (req, res) => {
