@@ -24,7 +24,7 @@ const { v4: uuidv4 } = require("uuid");
 dotenv.config(); // Load environment variables from .env file
 
 const app = express();
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+const stripe = new Stripe(process.env.STRIPE_KEY);
 const stripeWebSecret=process.env.STRIPE_WEBHOOK_SECRET;
 // CORS configuration
 const corsOptions = {
@@ -260,7 +260,7 @@ app.get("/api/users/:email/orders", async (req, res) => {
 });
 
 //stripe session
-app.post("/api/session", async (req, res) => {
+app.post("/api/session",csrfProtection, async (req, res) => {
   try {
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
@@ -307,56 +307,79 @@ app.post("/api/webhook", express.raw({ type: "application/json" }), async (req, 
   res.status(200).end();
 });
 
+// Stripe checkout endpoint
 app.post("/api/checkout", async (req, res) => {
-  const { items, email } = req.body; // Ensure email is sent with the request
-
-  if (!items || !Array.isArray(items)) {
-      return res.status(400).json({ message: "Invalid request: items must be an array" });
-  }
-
-  const lineItems = items.map((product) => ({
-      price_data: {
-          currency: "ttd", // Ensure the currency matches your requirements
-          product_data: {
-              name: product.name,
-              images: [product.image],
-          },
-          unit_amount: product.price * 100,
-      },
-      quantity: product.quantity,
-  }));
+  const items = req.body.items;
+  let line_items = [];
+  items.forEach((item) => {
+    line_items.push({
+      price: item.id,
+      quantity: item.quantity,
+    });
+  });
 
   try {
-      // Generate unique order ID
-      const orderId = uuidv4();
+    const session = await stripe.checkout.sessions.create({
+      line_items: line_items,
+      mode: "payment",
+      success_url: `${process.env.CLIENT_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.CLIENT_URL}/cancel`,
+    });
 
-      // Create a Stripe checkout session
-      const session = await stripe.checkout.sessions.create({
-          payment_method_types: ["card"],
-          line_items: lineItems,
-          mode: "payment",
-          success_url: `${process.env.FRONTEND_URL}/success?orderId=${orderId}`,
-          cancel_url: `${process.env.FRONTEND_URL}/cancel`,
-      });
-
-      // Save order to the database
-      const newOrder = new Quote({
-          orderId,
-          email, // Save user email
-          items,
-          totalAmount: items.reduce((sum, item) => sum + item.price * item.quantity, 0),
-          status: "Pending",
-          stripeSessionId: session.id,
-      });
-
-      await newOrder.save();
-
-      res.json({ id: session.id, orderId }); // Return orderId to the frontend
+    res.json({ url: session.url });
   } catch (error) {
-      console.error("Error creating Stripe checkout session:", error);
-      res.status(500).json({ message: "Error creating Stripe checkout session" });
+    console.error("Error creating Stripe checkout session:", error);
+    res.status(500).json({ message: "Error creating Stripe checkout session" });
   }
 });
+  // const { items, email } = req.body; // Ensure email is sent with the request
+
+  // if (!items || !Array.isArray(items)) {
+  //     return res.status(400).json({ message: "Invalid request: items must be an array" });
+  // }
+
+  // const lineItems = items.map((product) => ({
+  //     price_data: {
+  //         currency: "ttd", // Ensure the currency matches your requirements
+  //         product_data: {
+  //             name: product.name,
+  //             images: [product.image],
+  //         },
+  //         unit_amount: product.price * 100,
+  //     },
+  //     quantity: product.quantity,
+  // }));
+
+  // try {
+  //     // Generate unique order ID
+  //     const orderId = uuidv4();
+
+  //     // Create a Stripe checkout session
+  //     const session = await stripe.checkout.sessions.create({
+  //         payment_method_types: ["card"],
+  //         line_items: lineItems,
+  //         mode: "payment",
+  //         success_url: `${process.env.FRONTEND_URL}/success?orderId=${orderId}`,
+  //         cancel_url: `${process.env.FRONTEND_URL}/cancel`,
+  //     });
+
+  //     // Save order to the database
+  //     const newOrder = new Quote({
+  //         orderId,
+  //         email, // Save user email
+  //         items,
+  //         totalAmount: items.reduce((sum, item) => sum + item.price * item.quantity, 0),
+  //         status: "Pending",
+  //         stripeSessionId: session.id,
+  //     });
+
+  //     await newOrder.save();
+
+  //     res.json({ id: session.id, orderId }); // Return orderId to the frontend
+  // } catch (error) {
+  //     console.error("Error creating Stripe checkout session:", error);
+  //     res.status(500).json({ message: "Error creating Stripe checkout session" });
+  // }
 
 // Stripe webhook endpoint
 app.get("/api/orders/:orderId", async (req, res) => {
